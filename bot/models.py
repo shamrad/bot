@@ -1,11 +1,14 @@
 from django.db import models
 
 class TeleUser (models.Model):
-    first_name=models.CharField(max_length=10000)
+    first_name=models.CharField(max_length=10000,blank=True)
     last_name=models.CharField(max_length=10000, blank=True)
-    user_name=models.CharField(max_length=1111121)
+    user_name=models.CharField(max_length=1111121,blank=True)
     user_id=models.IntegerField()
     state=models.IntegerField()
+
+    def __str__(self):
+        return str(self.first_name)
 
 
 class Word(models.Model):
@@ -17,3 +20,8 @@ class Word(models.Model):
     last_review_status=models.BooleanField(default=False)
     next_review_time=models.TimeField(null=True)
     level=models.IntegerField(default=0)
+    correct_answer=models.IntegerField(default=0)
+    wrong_answer=models.IntegerField(default=0)
+
+    def __str__(self):
+        return str(self.word)
