@@ -6,6 +6,7 @@ class TeleUser (models.Model):
     user_name=models.CharField(max_length=1111121,blank=True)
     user_id=models.IntegerField()
     state=models.IntegerField()
+    points=models.IntegerField(default=0)
 
     def __str__(self):
         return str(self.first_name)
