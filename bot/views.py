@@ -59,7 +59,9 @@ class Start(telepot.helper.ChatHandler):
                         text='📉 \n شما  —-  لغت ثبت کرده اید✒️ \n \n —-لغت برای مرور دارید!💡\n \n و موفق به حفظ —— لغت شده اید.📌\n \n .'
                         send=self.sender.sendMessage(text,reply_markup=key2)
                         self._id=msg['from']['id']
+
                         self._message_ind=telepot.message_identifier(send)
+
                     elif msg['text']=='لیست لغت های ثبت شده':
                         list=Word.objects.filter(teleuser=a.pk)
                         n=0
@@ -105,7 +107,7 @@ class Start(telepot.helper.ChatHandler):
                 elif a.state==5:
                     a.state = 1
                     a.save()
-                    self.close()
+                    # self.close()
 
                 else:
                     self.sender.sendMessage('یکی از گزینه های زیر را انتخاب کنید', reply_markup=key1)
@@ -159,9 +161,8 @@ class Start(telepot.helper.ChatHandler):
                 ]])
 
             new=bot.editMessageText(msg_identifier=self._message_ind,text=question,reply_markup=key3)
-            # new=bot.editMessageText(msg_identifier=self._message_ind,text=l,reply_markup=key3)
+
             self._message_ind=telepot.message_identifier(new)
-            # self.sender.sendMessage(question,reply_markup=key3)
 
         else:
             self.sender.sendMessage('هیچ لغتی برای مرور موجود نیست')
@@ -188,25 +189,23 @@ class Start(telepot.helper.ChatHandler):
                     a.save()
                     self._answer = self._show_next_question(msg=msg)
                 else:
-                    self.sender.sendMessage('برای شروع فرایند مرور باید حداقل 4 کلمه وارد کنید')
-                    self.sender.sendMessage('یکی از گزینه های زیر را انتخاب کنید')
+                    self.sender.sendMessage('برای شروع فرایند مرور باید حداقل 4 کلمه وارد کنید \n یکی از گزینه های زیر را انتخاب کنید ')
                     a.state=1
                     a.save()
-
 
             elif query_data == 'end':
                 a.state=1
                 a.save()
                 key1 = ReplyKeyboardMarkup(
-                    keyboard=[[KeyboardButton(text='sabte loghate jadid'), KeyboardButton(text='moro loghat ha')],
-                              [KeyboardButton(text='liste loghat ha')]],
+                    keyboard=[[KeyboardButton(text='ثبت لغت جدید'), KeyboardButton(text='مرور لغت ها')],
+                              [KeyboardButton(text='لیست لغت های ثبت شده')]],
                     resize_keyboard=True, one_time_keyboard=True)
-                self.sender.sendMessage('az moro kharej shodid eki az guzine ha ro entekhab konid', reply_markup=key1)
+                self.sender.sendMessage('برای ادامه یکی از گزینه ها را انتخاب کنید', reply_markup=key1)
                 self.close()
 
             elif query_data== str(self._answer):
                 days=[1,1,2,5,10,20,40]
-                bot.answerCallbackQuery(query_id, text='afarin bari kala ')
+                bot.answerCallbackQuery(query_id, text=' درسته ')
 
                 id=self._answer
 
@@ -223,52 +222,59 @@ class Start(telepot.helper.ChatHandler):
                 word.save()
                 a.points=a.points+5
                 a.save()
-                bot.answerCallbackQuery(query_id, text='barik')
                 self._answer = self._show_next_question(msg=msg)
 
             else:
                 if self._answer==None:
-                    self.sender.sendMessage('az aval')
+
+                    key1 = ReplyKeyboardMarkup(
+                        keyboard=[[KeyboardButton(text='ثبت لغت جدید'), KeyboardButton(text='مرور لغت ها')],
+                                  [KeyboardButton(text='لیست لغت های ثبت شده')]],
+                        resize_keyboard=True, one_time_keyboard=True)
+                    self.sender.sendMessage('برای شروع مجدد یکی از گزینه های زیر را انتخاب کنید',reply_markup=key1)
                     a.state=1
                     a.save()
                 else:
                     id = self._answer
                     word = Word.objects.get(id=id)
                     word.level=0
-                    word.wrong_answer=+1
+                    word.wrong_answer=word.wrong_answer+1
                     word.save()
-                    bot.answerCallbackQuery(query_id, text='wrong ')
-
+                    bot.answerCallbackQuery(query_id, text=query_data)
+                    self._answer = self._show_next_question(msg=msg)
 
     def on__idle(self, event):
         from_id=event['_idle']['source']['id']
         a=TeleUser.objects.get(user_id=from_id)
+
+        key1 = ReplyKeyboardMarkup(
+            keyboard=[[KeyboardButton(text='ثبت لغت جدید'), KeyboardButton(text='مرور لغت ها')],
+                      [KeyboardButton(text='لیست لغت های ثبت شده')]],
+            resize_keyboard=True, one_time_keyboard=True)
         if a.state==5:
             a.state=1
             a.save()
-            self.sender.sendMessage('time done')
+            self.sender.sendMessage('زمان شما به پایان رسید.',reply_markup=key1)
             self._answer=None
             self.close()
         else:
             pass
 
-            # bot.editMessageReplyMarkup(msg_identifier=self._message_ind, reply_markup=None)
-    # def on_close(self, ex):
-    #     key1 = ReplyKeyboardMarkup(
-    #         keyboard=[[KeyboardButton(text='sabte loghate jadid'), KeyboardButton(text='moro loghat ha')],
-    #                   [KeyboardButton(text='liste loghat ha')]],
-    #         resize_keyboard=True, one_time_keyboard=True)
-    #     # a=TeleUser.objects.get(user_id=self._id)
-    #     # a.points=self._score
-    #     text='score: {score}'.format(score=self._score)
-    #     self.sender.sendMessage(text,reply_markup=key1)
-    #     bot.editMessageReplyMarkup(msg_identifier=self._message_ind,reply_markup=None)
+    def on_close(self, ex):
+        key1 = ReplyKeyboardMarkup(
+            keyboard=[[KeyboardButton(text='sabte loghate jadid'), KeyboardButton(text='moro loghat ha')],
+                      [KeyboardButton(text='liste loghat ha')]],
+            resize_keyboard=True, one_time_keyboard=True)
+        # a=TeleUser.objects.get(user_id=self._id)
+        # a.points=self._score
+        text='score: {score}'.format(score=self._score)
+        self.sender.sendMessage(text,reply_markup=key1)
+        bot.editMessageReplyMarkup(msg_identifier=self._message_ind,reply_markup=None)
 
 
 bot = telepot.DelegatorBot(TOKEN, [
     include_callback_query_chat_id(
     pave_event_space())(per_chat_id(), create_open, Start, timeout=10),
-    # pave_event_space()(
-        # per_callback_query_origin(), create_open, Test, timeout=10),
+
 ])
 bot.message_loop(run_forever='Listening ...')
