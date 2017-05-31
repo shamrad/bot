@@ -1,5 +1,10 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, sys
+
+import asyncio
+from mimetypes import init
+
 import telepot
+from aiohttp import web
 from telepot.delegate import pave_event_space, per_chat_id, create_open,  include_callback_query_chat_id
 from .models import TeleUser,Word
 from .form import TeleUserForm, WordForm
@@ -296,18 +301,30 @@ class Start(telepot.helper.ChatHandler):
         else:
             pass
 
+
+PORT = int(sys.argv[2])
+
+
+
+loop = asyncio.get_event_loop()
+app = web.Application(loop=loop)
+
 bot = telepot.DelegatorBot(TOKEN, [
     include_callback_query_chat_id(
     pave_event_space())(per_chat_id(), create_open, Start, timeout=60),
 
 ])
 
-# webhook = OrderedWebhook(bot)
-bot.message_loop(run_forever='Listening ...')
+webhook = OrderedWebhook(bot)
+# bot.message_loop(run_forever='Listening ...')
 
 
-# loop.run_until_complete(init(app, bot))
+loop.run_until_complete(init(app, bot))
 
-# loop.create_task(webhook.run_forever())
+loop.create_task(webhook.run_forever())
 
 
+try:
+    web.run_app(app, port=PORT)
+except KeyboardInterrupt:
+    pass
