@@ -6,7 +6,7 @@ from .form import TeleUserForm, WordForm
 from telepot.namedtuple import ReplyKeyboardMarkup,KeyboardButton,ReplyKeyboardRemove,InlineKeyboardButton, InlineKeyboardMarkup
 from django.db.models import Q
 import random
-
+from telepot.aio.loop import OrderedWebhook
 TOKEN='333028480:AAG2EAmXyBfGqV4XYyD7iD7EEZnd6zvil78'
 
 
@@ -19,7 +19,7 @@ class Start(telepot.helper.ChatHandler):
         self._score=0
         self._message_ind=None
         self._delete=0
-
+        self._message_ind_delet=None
 
 # state = 1  start
 # state = 2  sabte loghat
@@ -36,8 +36,8 @@ class Start(telepot.helper.ChatHandler):
         if user:
             a = TeleUser.objects.get(user_id=from_id)
             key1 = ReplyKeyboardMarkup(
-                keyboard=[[KeyboardButton(text='ثبت لغت جدید'), KeyboardButton(text='مرور لغت ها')],
-                          [KeyboardButton(text='لیست لغت های ثبت شده')]],
+                keyboard=[[KeyboardButton(text='ثبت لغت جدید ✍🏻'), KeyboardButton(text='مرور لغت ها 🔎')],
+                          [KeyboardButton(text='لیست لغت های ثبت شده📝'), KeyboardButton(text='معرفی به دوستان❣️')]],
                 resize_keyboard=True, one_time_keyboard=True)
             if msg['text']=='/back':
                 a.state = 1
@@ -47,22 +47,27 @@ class Start(telepot.helper.ChatHandler):
             else:
 
                 if a.state==1:
-                    if msg['text']=='ثبت لغت جدید':
+                    if msg['text']=='ثبت لغت جدید ✍🏻':
                         a.state =2
                         a.save()
                         self.sender.sendMessage('لغت مورد نظر را وارد کنید. /back',reply_markup=ReplyKeyboardRemove(remove_keyboard=True))
-                    elif msg['text']=='مرور لغت ها':
+                    elif msg['text']=='مرور لغت ها 🔎':
                         wordscount = Word.objects.filter(teleuser=a).count()
+                        review= Word.objects.filter(teleuser=a).filter(
+                            Q(next_review_time__lte=datetime.now()) | Q(next_review_time=None)).count()
+                        memory=wordscount-review
+
                         key2=InlineKeyboardMarkup(inline_keyboard=[
                             [InlineKeyboardButton(text=' مرور لغت ها', callback_data='shoro')],[InlineKeyboardButton(text='بازگشت به منوی اصلی', callback_data='end')
                          ]])
-                        text='📉 \n شما  —-  لغت ثبت کرده اید✒️ \n \n —-لغت برای مرور دارید!💡\n \n و موفق به حفظ —— لغت شده اید.📌\n \n .'
+
+                        text='📉 \n شما  {count}  لغت ثبت کرده اید✒️ \n \n {review} لغت برای مرور دارید!💡\n \n  و موفق به حفظ  {mem}  لغت شده اید.📌\n \n .'.format(mem=memory,count=wordscount,review=review)
                         send=self.sender.sendMessage(text,reply_markup=key2)
                         self._id=msg['from']['id']
 
                         self._message_ind=telepot.message_identifier(send)
 
-                    elif msg['text']=='لیست لغت های ثبت شده':
+                    elif msg['text']=='لیست لغت های ثبت شده📝':
                         list=Word.objects.filter(teleuser=a.pk)
                         n=0
                         for i in list:
@@ -74,6 +79,8 @@ class Start(telepot.helper.ChatHandler):
 
                         a.state=4
                         a.save()
+                    elif msg['text']=='معرفی به دوستان❣️':
+                        self.sender.sendMessage('معرفی کن دیگه')
 
                     else:
                         self.sender.sendMessage('یکی از گزینه های زیر را انتخاب کنید', reply_markup=key1)
@@ -107,7 +114,7 @@ class Start(telepot.helper.ChatHandler):
                 elif a.state==5:
                     a.state = 1
                     a.save()
-                    # self.close()
+                    self.close()
 
                 else:
                     self.sender.sendMessage('یکی از گزینه های زیر را انتخاب کنید', reply_markup=key1)
@@ -119,9 +126,9 @@ class Start(telepot.helper.ChatHandler):
         else:
 
             form = TeleUserForm(data={
-                'user_name': msg['from']['username'],
+                # 'user_name': msg['from']['username'],
                 'user_id': from_id,
-                'first_name': msg['from']['first_name'],
+                # 'first_name': msg['from']['first_name'],
                 'state': 1,
             })
             if form.is_valid():
@@ -146,7 +153,6 @@ class Start(telepot.helper.ChatHandler):
             for i in choice:
                 list.append(i)
             answer=words.pk
-            answer_meaning = words.meaning
             list.append(words)
             random.shuffle(list)
             question = '{word} ❓ \n\n' \
@@ -174,11 +180,27 @@ class Start(telepot.helper.ChatHandler):
         query_id, from_id, query_data = telepot.glance(msg, flavor='callback_query')
         a = TeleUser.objects.get(user_id=msg['from']['id'])
         if a.state==4:
-            edit=Word.objects.get(pk=query_data)
-            text='کلمه : {word}\n\n معنی : {means}\n\n ✅تعداد پاسخ صحیح : {sahih}\n \n ❌تعداد پاسخ غلط : {ghalat}\n \n ⏳زمان تکرار بعدی : {time}\n ..'.format(word=edit.word,
-                                                     means=edit.meaning,sahih=edit.correct_answer,
-                                                     ghalat=edit.wrong_answer,time=edit.next_review_time)
-            self.sender.sendMessage(text)
+            if query_data=='delete':
+                deleteword=Word.objects.get(pk=self._delete).delete()
+                bot.editMessageReplyMarkup(msg_identifier=self._message_ind_delet,reply_markup=None)
+                bot.answerCallbackQuery(query_id, text=' لغط خذف شد ')
+
+            else:
+                edit=Word.objects.get(pk=query_data)
+                text='کلمه : {word}\n\n معنی : {means}\n\n ✅تعداد پاسخ صحیح : {sahih}\n \n ❌تعداد پاسخ غلط : {ghalat}\n \n ⏳زمان تکرار بعدی : {time}\n ..'.format(word=edit.word,
+                                                         means=edit.meaning,sahih=edit.correct_answer,
+                                                         ghalat=edit.wrong_answer,time=edit.next_review_time)
+
+                key = InlineKeyboardMarkup(inline_keyboard=[
+                    [InlineKeyboardButton(text='حذف این لغت', callback_data='delete')]])
+                detail=self.sender.sendMessage(text,reply_markup=key)
+                if self._message_ind_delet:
+                    bot.editMessageReplyMarkup(msg_identifier=self._message_ind_delet,reply_markup=None)
+                    self._message_ind_delet=telepot.message_identifier(detail)
+                else:
+                    self._message_ind_delet = telepot.message_identifier(detail)
+                self._delete=edit.pk
+
 
         else:
             if query_data == 'shoro':
@@ -197,8 +219,9 @@ class Start(telepot.helper.ChatHandler):
                 a.state=1
                 a.save()
                 key1 = ReplyKeyboardMarkup(
-                    keyboard=[[KeyboardButton(text='ثبت لغت جدید'), KeyboardButton(text='مرور لغت ها')],
-                              [KeyboardButton(text='لیست لغت های ثبت شده')]],
+                    keyboard=[[KeyboardButton(text='ثبت لغت جدید ✍🏻'), KeyboardButton(text='مرور لغت ها 🔎')],
+                              [KeyboardButton(text='لیست لغت های ثبت شده📝'),
+                               KeyboardButton(text='معرفی به دوستان❣️')]],
                     resize_keyboard=True, one_time_keyboard=True)
                 self.sender.sendMessage('برای ادامه یکی از گزینه ها را انتخاب کنید', reply_markup=key1)
                 self.close()
@@ -228,8 +251,9 @@ class Start(telepot.helper.ChatHandler):
                 if self._answer==None:
 
                     key1 = ReplyKeyboardMarkup(
-                        keyboard=[[KeyboardButton(text='ثبت لغت جدید'), KeyboardButton(text='مرور لغت ها')],
-                                  [KeyboardButton(text='لیست لغت های ثبت شده')]],
+                        keyboard=[[KeyboardButton(text='ثبت لغت جدید ✍🏻'), KeyboardButton(text='مرور لغت ها 🔎')],
+                                  [KeyboardButton(text='لیست لغت های ثبت شده📝'),
+                                   KeyboardButton(text='معرفی به دوستان❣️')]],
                         resize_keyboard=True, one_time_keyboard=True)
                     self.sender.sendMessage('برای شروع مجدد یکی از گزینه های زیر را انتخاب کنید',reply_markup=key1)
                     a.state=1
@@ -240,7 +264,7 @@ class Start(telepot.helper.ChatHandler):
                     word.level=0
                     word.wrong_answer=word.wrong_answer+1
                     word.save()
-                    bot.answerCallbackQuery(query_id, text=query_data)
+                    bot.answerCallbackQuery(query_id, text='ghalat')
                     self._answer = self._show_next_question(msg=msg)
 
     def on__idle(self, event):
@@ -248,8 +272,8 @@ class Start(telepot.helper.ChatHandler):
         a=TeleUser.objects.get(user_id=from_id)
 
         key1 = ReplyKeyboardMarkup(
-            keyboard=[[KeyboardButton(text='ثبت لغت جدید'), KeyboardButton(text='مرور لغت ها')],
-                      [KeyboardButton(text='لیست لغت های ثبت شده')]],
+            keyboard=[[KeyboardButton(text='ثبت لغت جدید ✍🏻'), KeyboardButton(text='مرور لغت ها 🔎')],
+                      [KeyboardButton(text='لیست لغت های ثبت شده📝'), KeyboardButton(text='معرفی به دوستان❣️')]],
             resize_keyboard=True, one_time_keyboard=True)
         if a.state==5:
             a.state=1
@@ -261,20 +285,29 @@ class Start(telepot.helper.ChatHandler):
             pass
 
     def on_close(self, ex):
-        key1 = ReplyKeyboardMarkup(
-            keyboard=[[KeyboardButton(text='sabte loghate jadid'), KeyboardButton(text='moro loghat ha')],
-                      [KeyboardButton(text='liste loghat ha')]],
-            resize_keyboard=True, one_time_keyboard=True)
-        # a=TeleUser.objects.get(user_id=self._id)
-        # a.points=self._score
-        text='score: {score}'.format(score=self._score)
-        self.sender.sendMessage(text,reply_markup=key1)
-        bot.editMessageReplyMarkup(msg_identifier=self._message_ind,reply_markup=None)
-
+        if self._message_ind:
+            key1 = ReplyKeyboardMarkup(
+                keyboard=[[KeyboardButton(text='ثبت لغت جدید ✍🏻'), KeyboardButton(text='مرور لغت ها 🔎')],
+                          [KeyboardButton(text='لیست لغت های ثبت شده📝'), KeyboardButton(text='معرفی به دوستان❣️')]],
+                resize_keyboard=True, one_time_keyboard=True)
+            text='score: {score}'.format(score=self._score)
+            self.sender.sendMessage(text,reply_markup=key1)
+            bot.editMessageReplyMarkup(msg_identifier=self._message_ind,reply_markup=None)
+        else:
+            pass
 
 bot = telepot.DelegatorBot(TOKEN, [
     include_callback_query_chat_id(
-    pave_event_space())(per_chat_id(), create_open, Start, timeout=10),
+    pave_event_space())(per_chat_id(), create_open, Start, timeout=60),
 
 ])
+
+# webhook = OrderedWebhook(bot)
 bot.message_loop(run_forever='Listening ...')
+
+
+# loop.run_until_complete(init(app, bot))
+
+# loop.create_task(webhook.run_forever())
+
+
